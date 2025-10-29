@@ -1,0 +1,49 @@
+edgepredict-engine-v2/
+│
+├── Dockerfile                    [UPDATE]
+├── README.md                     [UPDATE]
+├── input.json                    [EXAMPLE]
+├── tool.stl                      
+│
+├── include/
+│   ├── json.hpp                  [EXISTING]
+│   ├── stl_reader.h              [EXISTING]
+│   ├── simulation.h              [MAJOR UPDATE]
+│   ├── physics_models.h          [NEW - All material models]
+│   ├── cfd_solver.h              [NEW - CFD engine]
+│   ├── particle_system.h         [NEW - Particle visualization]
+│   └── navier_stokes.h           [NEW - Fluid solver]
+│
+└── src/
+    ├── main.cpp                  [EXISTING]
+    ├── simulation.cpp            [MAJOR UPDATE]
+    ├── physics_models.cpp        [NEW]
+    ├── cfd_solver.cpp            [NEW]
+    ├── particle_system.cpp       [NEW]
+    └── navier_stokes.cpp         [NEW]
+
+
+
+
+## 🎯 **Architecture Overview**
+```
+┌─────────────────────────────────────────────┐
+│         SIMULATION COORDINATOR              │
+│  (orchestrates FEA + CFD coupling)          │
+└──────────┬────────────────────┬─────────────┘
+           │                    │
+           ▼                    ▼
+┌──────────────────┐   ┌──────────────────────┐
+│   FEA SOLVER     │   │    CFD SOLVER        │
+│                  │   │                      │
+│ • Johnson-Cook   │◄──┤ • Navier-Stokes     │
+│ • Thermal        │   │ • Chip Formation    │
+│ • Usui Wear      │──►│ • Pressure Field    │
+│ • Failure        │   │ • Heat Transfer     │
+└──────────────────┘   └──────────┬───────────┘
+                                  │
+                                  ▼
+                       ┌──────────────────────┐
+                       │  PARTICLE SYSTEM     │
+                       │  (Visualization)     │
+                       └──────────────────────┘
