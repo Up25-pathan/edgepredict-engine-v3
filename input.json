@@ -10,7 +10,13 @@
     "heat_transfer_coefficient": 50.0,
     "sliding_velocity_m_s": 2.0,
     "uncut_chip_thickness_mm": 0.1,
-    "cutting_width_mm": 3.0
+    "cutting_width_mm": 3.0,
+    
+    "contact_zone": {
+  "x": [-2.0, 2.0],
+  "y": [-2.0, 2.0],
+  "z": [48.0, 52.0] 
+}
   },
   "material_properties": {
     "name": "Ti-6Al-4V (Titanium Alloy)",
@@ -41,8 +47,8 @@
     "friction_coefficient": 0.6,
     "chip_thickness_ratio": 2.5
   },
-  "file_paths": {
-    "tool_geometry": "tool.stl",
-    "output_results": "output.json"
+ "file_paths": {
+  "tool_geometry": "my_tool.step",
+  "output_results": "output.json"
   }
 }
