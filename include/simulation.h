@@ -7,6 +7,22 @@
 #include "json.hpp"
 #include <Eigen/Dense>
 
+// --- OpenCASCADE Headers (with full include path) ---
+#include <opencascade/STEPControl_Reader.hxx>
+#include <opencascade/IGESControl_Reader.hxx>
+#include <opencascade/TopoDS_Shape.hxx>
+#include <opencascade/TopExp_Explorer.hxx>
+#include <opencascade/TopoDS.hxx>
+#include <opencascade/TopoDS_Face.hxx>
+#include <opencascade/BRep_Tool.hxx>
+#include <opencascade/BRepMesh_IncrementalMesh.hxx>
+#include <opencascade/Poly_Triangulation.hxx>
+#include <opencascade/TColgp_Array1OfPnt.hxx>
+#include <opencascade/Poly_Array1OfTriangle.hxx>
+#include <opencascade/gp_Pnt.hxx>
+#include <map> // For node de-duplication
+// --- End OpenCASCADE Headers ---
+
 // Include all physics modules
 #include "physics_models.h"
 #include "navier_stokes.h"
@@ -29,9 +45,9 @@ struct Node {
     double temperature = 20.0;
     double stress = 0.0;
     double strain = 0.0;
-    double plastic_strain = 0.0;  // Added for Johnson-Cook model
+    double plastic_strain = 0.0;
     double accumulated_wear = 0.0;
-    double accumulated_damage = 0.0;  // For progressive failure
+    double accumulated_damage = 0.0;
     NodeStatus status = NodeStatus::OK;
 };
 
@@ -58,8 +74,8 @@ private:
     json solve_time_step(int step_num);
     
     // Node-level updates
-    void update_node_mechanics(Node& node, double dt);
-    void update_node_thermal(Node& node, double dt, double chip_heat_flux);
+    void update_node_mechanics(Node& node, double dt, bool is_in_contact_zone);
+    void update_node_thermal(Node& node, double dt, double chip_heat_flux, bool is_in_contact_zone);
     bool check_node_failure(Node& node);
     
     // Configuration
@@ -84,7 +100,11 @@ private:
     double strain_rate;
     double strain_increment;
     double sliding_velocity;
-    double ambient_temperature;  // Added for thermal calculations
+    double ambient_temperature;
+
+    // Contact Zone Boundaries
+    Eigen::Vector3d contact_zone_min;
+    Eigen::Vector3d contact_zone_max;
     
     // Statistics
     int total_fractured_nodes;
@@ -100,12 +120,16 @@ public:
     void run();
 
     // Output data structures
-    json time_series_output;      // Time-history of global metrics
-    json cfd_visualization_data;  // Particle snapshots for frontend
+    json time_series_output;
+    json cfd_visualization_data;
 
 private:
     void load_config(const std::string& path);
+    
     void load_geometry();
+    void load_geometry_stl(const std::string& path);
+    void load_geometry_cad(const std::string& path, const std::string& format);
+
     void write_output();
     void calculate_tool_life_prediction();
     
