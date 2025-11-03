@@ -1,7 +1,7 @@
 {
   "simulation_parameters": {
-    "num_steps": 200,
-    "time_step_duration_s": 0.0001
+    "num_steps": 500,
+    "time_step_duration_s": 0.001
   },
   "physics_parameters": {
     "ambient_temperature_C": 25.0,
@@ -13,10 +13,10 @@
     "cutting_width_mm": 3.0,
     
     "contact_zone": {
-  "x": [-2.0, 2.0],
-  "y": [-2.0, 2.0],
-  "z": [48.0, 52.0] 
-}
+      "x": [-0.004, 0.004],
+      "y": [-0.051, -0.045],
+      "z": [-0.004, 0.004] 
+    }
   },
   "material_properties": {
     "name": "Ti-6Al-4V (Titanium Alloy)",
