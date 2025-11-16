@@ -29,7 +29,8 @@ public:
 private:
     double A_constant;
     double B_inv_temp_K;
-    double calibration_factor; // NEW: Material-specific wear multiplier
+    double calibration_factor; 
+    double ref_yield_strength; // NEW: Used to scale wear for different metals
 };
 
 class ThermalModel {
@@ -44,7 +45,8 @@ private:
     double specific_heat;
     double heat_transfer_coeff;
     double thermal_conductivity;
-    double heat_gen_factor; // NEW: Material-specific heat generation factor
+    double heat_gen_factor; 
+    double ref_yield_strength; // NEW: Used to scale heat generation
 };
 
 class FailureCriterion {
@@ -57,7 +59,7 @@ private:
     double ultimate_tensile_strength;
     double fatigue_limit;
     double damage_threshold;
-    double melting_point; // NEW: To check for thermal failure relative to material
+    double melting_point; 
 };
 
 class ChipFormationModel {
