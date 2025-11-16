@@ -49,6 +49,9 @@ struct Node {
     double accumulated_wear = 0.0;
     double accumulated_damage = 0.0;
     NodeStatus status = NodeStatus::OK;
+
+    // NEW: The engine will mark this true if the node is part of the cutting tip
+    bool is_active_contact = false;
 };
 
 struct Mesh {
@@ -69,6 +72,9 @@ public:
     ~FEASolver();
     
     void solve(Mesh& mesh, int num_steps);
+
+    // NEW: The function that gives the engine "eyes"
+    void auto_detect_cutting_edge(Mesh& mesh);
 
 private:
     // Core FEA loop
@@ -103,10 +109,10 @@ private:
     double sliding_velocity;
     double ambient_temperature;
 
-    // Contact Zone Boundaries
-    Eigen::Vector3d contact_zone_min;
-    Eigen::Vector3d contact_zone_max;
-    
+    // REMOVED: Manual contact zone boundaries
+    // Eigen::Vector3d contact_zone_min;
+    // Eigen::Vector3d contact_zone_max;
+
     // Statistics
     int total_fractured_nodes;
 };
@@ -120,10 +126,8 @@ public:
     Simulation();
     void run();
 
-    // --- THIS IS THE FIX ---
-    // This declaration was missing
+    // Writes progress to stdout/logs for the worker to pick up
     void write_progress(int step, int total_steps, const json& current_metrics);
-    // --- END FIX ---
 
     // Output data structures
     json time_series_output;
