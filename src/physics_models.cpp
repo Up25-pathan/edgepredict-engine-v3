@@ -2,7 +2,7 @@
 #include "physics_models.h"
 #include <algorithm>
 #include <cmath>
-#include <cstdlib> // For rand()
+#include <cstdlib> 
 
 // ═══════════════════════════════════════════════════════════
 // JOHNSON-COOK MODEL IMPLEMENTATION
@@ -31,7 +31,6 @@ double JohnsonCookModel::calculate_stress(double temperature_C, double plastic_s
     double safe_strain_rate = std::max(strain_rate, 1e-6);
     double strain_rate_ratio = safe_strain_rate / safe_ref_strain_rate;
     
-    // Fix log domain error if ratio < 1
     double rate_term = 1.0 + C * std::log(std::max(1.0, strain_rate_ratio));
 
     double safe_T_melt = std::max(T_melt, T_room + 1.0); 
@@ -42,16 +41,17 @@ double JohnsonCookModel::calculate_stress(double temperature_C, double plastic_s
 }
 
 // ═══════════════════════════════════════════════════════════
-// USUI WEAR MODEL IMPLEMENTATION (ROBUST & CALIBRATED)
+// USUI WEAR MODEL IMPLEMENTATION (ROBUST & SMART)
 // ═══════════════════════════════════════════════════════════
 
 UsuiWearModel::UsuiWearModel(const json& config) {
     const auto& wear = config["material_properties"]["usui_wear_model"];
     A_constant = wear["A_constant"].get<double>();
     B_inv_temp_K = wear["B_inv_temp_K"].get<double>();
-    
-    // Load Calibration Factor from JSON (Default 1.0)
     calibration_factor = config["material_properties"].value("wear_calibration_factor", 1.0);
+    
+    // SMART UPDATE: Load yield strength to normalize stress
+    ref_yield_strength = config["material_properties"]["A_yield_strength_MPa"].get<double>();
 }
 
 double UsuiWearModel::calculate_wear_rate(double temperature_C, double stress_MPa, double sliding_velocity) const {
@@ -65,14 +65,14 @@ double UsuiWearModel::calculate_wear_rate(double temperature_C, double stress_MP
     // Base Usui Equation
     double base_wear = A_constant * stress_MPa * sliding_velocity * std::exp(-B_inv_temp_K / temp_K);
 
-    // Temperature scaling (Non-linear acceleration at high heat)
+    // Temperature scaling
     double temp_scale = std::pow(std::max(0.0, std::min(1.0, temperature_C / 1000.0)), 1.5);
     double temp_multiplier = 1.0 + 5.0 * temp_scale;
 
-    double safe_stress_threshold = std::max(800.0, 1.0);
-    double stress_factor = std::pow(stress_MPa / safe_stress_threshold, 1.2);
+    // SMART UPDATE: Use relative stress instead of hardcoded 800.0
+    double stress_ratio = stress_MPa / std::max(ref_yield_strength, 1.0);
+    double stress_factor = std::pow(stress_ratio, 1.2);
 
-    // Dynamic calibration factor instead of hardcoded 1e-7
     double final_wear_rate = (base_wear * temp_multiplier * stress_factor) * (calibration_factor * 1e-7);
 
     return std::max(1e-15, final_wear_rate);
@@ -88,32 +88,32 @@ ThermalModel::ThermalModel(const json& config) {
     specific_heat = props["specific_heat_J_kgC"].get<double>();
     heat_transfer_coeff = config["physics_parameters"]["heat_transfer_coefficient"].get<double>();
     thermal_conductivity = props.value("thermal_conductivity_W_mK", 20.0); 
-
-    // Load Heat Gen Factor from JSON (Default 1.8)
     heat_gen_factor = props.value("heat_generation_factor", 1.8);
+    
+    // SMART UPDATE: Load yield strength
+    ref_yield_strength = props["A_yield_strength_MPa"].get<double>();
 
     density = std::max(density, 1.0);
     specific_heat = std::max(specific_heat, 1.0);
-    heat_transfer_coeff = std::max(heat_transfer_coeff, 0.0);
-    thermal_conductivity = std::max(thermal_conductivity, 0.01);
 }
 
 double ThermalModel::calculate_heat_generation(double stress, double strain_rate) const {
     double safe_stress = std::max(stress, 0.0);
     double safe_strain_rate = std::max(strain_rate, 0.0);
 
-    // Taylor-Quinney coefficient approx 0.9
     double beta = 0.95;
     double base_heat_flux = beta * safe_stress * safe_strain_rate;
 
-    double stress_scale = std::pow(safe_stress / std::max(800.0, 1.0), 1.5);
+    // SMART UPDATE: Relative stress scaling
+    double stress_ratio = safe_stress / std::max(ref_yield_strength, 1.0);
+    double stress_scale = std::pow(stress_ratio, 1.5);
+    
     double base_enhancement = 30.0;
     double enhancement = base_enhancement * (1.0 + 2.0 * stress_scale);
 
     double denominator = density * specific_heat;
     if (denominator <= 0) return 0.0;
     
-    // Use loaded heat_gen_factor
     return (base_heat_flux * enhancement * heat_gen_factor) / denominator;
 }
 
@@ -162,25 +162,18 @@ FailureCriterion::FailureCriterion(const json& config) {
     ultimate_tensile_strength = failure["ultimate_tensile_strength_MPa"].get<double>();
     fatigue_limit = failure.value("fatigue_limit_MPa", ultimate_tensile_strength * 0.5);
     damage_threshold = 1.0;
-    
-    // Load Melting Point for dynamic failure check
     melting_point = props["melting_point_C"].get<double>();
 
     ultimate_tensile_strength = std::max(ultimate_tensile_strength, 1.0);
-    fatigue_limit = std::max(fatigue_limit, 0.0);
-    
-    // Seed Randomness for Reproducibility
     std::srand(12345); 
 }
 
 bool FailureCriterion::check_failure(double stress, double temperature, double accumulated_damage) const {
-    // Use material's actual melting point instead of hardcoded 1400.0
-    if (temperature > melting_point * 0.95) return true; // Fail if near melting point
+    if (temperature > melting_point * 0.95) return true; 
     
     double safe_stress = std::max(stress, 0.0);
     double safe_accumulated_damage = std::max(accumulated_damage, 0.0);
     
-    // Deterministic "randomness"
     double stress_fluctuation = 0.95 + 0.1 * ((int(stress) % 100) / 100.0);
 
     if (safe_stress * stress_fluctuation > ultimate_tensile_strength * 1.3) {
@@ -193,10 +186,7 @@ bool FailureCriterion::check_failure(double stress, double temperature, double a
 double FailureCriterion::calculate_damage_increment(double stress, double cycles, double current_damage) const {
     double safe_stress = std::max(stress, 0.0);
     double safe_cycles = std::max(cycles, 0.0);
-    
-    // --- THIS WAS THE MISSING LINE ---
     double safe_current_damage = std::max(current_damage, 0.0);
-    // ---------------------------------
 
     double stress_ratio = safe_stress / ultimate_tensile_strength;
     double threshold_ratio = 0.4;
@@ -206,7 +196,6 @@ double FailureCriterion::calculate_damage_increment(double stress, double cycles
     double effective_stress = safe_stress * pow(std::max(0.0, (stress_ratio - threshold_ratio) / std::max(1e-6, 1.0 - threshold_ratio)), 1.5);
     double b = 5.0;
     double C = 5e21;
-    // Deterministic variation
     double variation = 0.95 + 0.1 * ((int(stress) % 10) / 10.0);
     
     double stress_pow_arg = std::max(1e-9, effective_stress / ultimate_tensile_strength);
