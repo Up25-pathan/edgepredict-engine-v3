@@ -33,12 +33,8 @@ FEASolver::FEASolver(const json& config, Simulation* sim)
     strain_increment = physics["strain_increment_per_step"].get<double>();
     sliding_velocity = physics["sliding_velocity_m_s"].get<double>();
 
-    if (!config_data["physics_parameters"].contains("contact_zone")) {
-        throw std::runtime_error("Configuration is missing 'contact_zone'.");
-    }
-    const auto& zone = config_data["physics_parameters"]["contact_zone"];
-    contact_zone_min = {zone["x"][0].get<double>(), zone["y"][0].get<double>(), zone["z"][0].get<double>()};
-    contact_zone_max = {zone["x"][1].get<double>(), zone["y"][1].get<double>(), zone["z"][1].get<double>()};
+    // --- REMOVED MANUAL CONTACT ZONE PARSING ---
+    // We now use auto-detection, so we don't need to throw errors about contact_zone.
     
     cfd_enabled = false;
     if (config_data.contains("cfd_parameters")) {
@@ -62,7 +58,11 @@ FEASolver::~FEASolver() = default;
 
 void FEASolver::solve(Mesh& mesh, int num_steps) {
     active_mesh = &mesh;
-    std::cout << "  EDGEPREDICT ENGINE v3.5 - ROBUST PHYSICS" << std::endl;
+
+    // --- NEW: Run Auto-Detection ---
+    auto_detect_cutting_edge(mesh); 
+
+    std::cout << "  EDGEPREDICT ENGINE v3.5 - SMART TURNING PHYSICS" << std::endl;
     
     #pragma omp parallel for
     for (size_t i = 0; i < mesh.nodes.size(); ++i) {
@@ -92,10 +92,10 @@ json FEASolver::solve_time_step(int step_num) {
     #pragma omp parallel for reduction(max:max_temp, max_stress) reduction(+:total_wear, fractured_this_step)
     for (size_t i = 0; i < active_mesh->nodes.size(); ++i) {
         Node& node = active_mesh->nodes[i];
-        const auto& pos = node.position;
-        bool is_in_contact_zone = (pos.x() >= contact_zone_min.x() && pos.x() <= contact_zone_max.x() &&
-                                   pos.y() >= contact_zone_min.y() && pos.y() <= contact_zone_max.y() &&
-                                   pos.z() >= contact_zone_min.z() && pos.z() <= contact_zone_max.z());
+        
+        // --- NEW SMART LOGIC ---
+        // Instead of checking a box coordinates, we check the flag set by auto_detect
+        bool is_in_contact_zone = node.is_active_contact;
         
         if (node.status == NodeStatus::OK) {
             update_node_mechanics(node, dt, is_in_contact_zone);
@@ -120,9 +120,8 @@ json FEASolver::solve_time_step(int step_num) {
         fluid_solver->update_boundaries_and_sources(*active_mesh, ambient_temperature, strain_rate, *thermal_model);
         fluid_solver->update(dt);
         
-        // --- CRITICAL FIX: Use actual material melting point ---
+        // Use actual material melting point
         double T_melt_limit = config_data["material_properties"]["melting_point_C"].get<double>();
-        // ------------------------------------------------------
 
         if (step_num % 2 == 0) {
              Eigen::Vector3d shear_zone(1e-4, 0.0, 1e-4); 
@@ -145,12 +144,11 @@ json FEASolver::solve_time_step(int step_num) {
         }
         avg_rake_pressure /= (rake_pressures.empty() ? 1.0 : rake_pressures.size());
         
-        // --- Analytical Pressure Fallback (Material Agnostic) ---
+        // Analytical Pressure Fallback (Material Agnostic)
         if (max_rake_pressure < 1e-6) {
              double specific_energy = config_data["material_properties"].value("specific_cutting_energy_MPa", 3000.0) * 1e6;
              max_rake_pressure = specific_energy * (std::min(1.0, strain_rate / 10000.0));
         }
-        // -----------------------------------------
 
         double reported_chip_temp = std::min(particle_system->get_average_temperature(), T_melt_limit);
 
@@ -213,9 +211,8 @@ void FEASolver::update_node_thermal(Node& node, double dt, double chip_heat_flux
     
     node.temperature += (heat_gen - heat_loss + (is_in_contact_zone ? chip_heat_flux : 0.0)) * dt;
 
-    // --- CRITICAL FIX: Use actual material melting point from Config ---
+    // Use actual material melting point from Config
     double T_melt = config_data["material_properties"]["melting_point_C"].get<double>();
-    // -----------------------------------------------------------------
 
     if (node.temperature > T_melt) node.temperature = T_melt;
     if (node.temperature < ambient_temperature) node.temperature = ambient_temperature;
@@ -228,6 +225,53 @@ bool FEASolver::check_node_failure(Node& node) {
         return true;
     }
     return false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTO-DETECTION LOGIC (NEW)
+// ═══════════════════════════════════════════════════════════
+
+void FEASolver::auto_detect_cutting_edge(Mesh& mesh) {
+    std::cout << "  [Auto-Detect] Scanning tool geometry for cutting tip..." << std::endl;
+
+    if (mesh.nodes.empty()) return;
+
+    // 1. Find the "Tip"
+    size_t tip_index = 0;
+    double max_score = -1e9;
+
+    for (size_t i = 0; i < mesh.nodes.size(); ++i) {
+        const auto& pos = mesh.nodes[i].position;
+        // Heuristic: For standard ISO turning (Z is up, X is radial), 
+        // the tip is the most positive X and Z.
+        double score = (pos.x() * 0.7) + (pos.z() * 0.3); 
+
+        if (score > max_score) {
+            max_score = score;
+            tip_index = i;
+        }
+    }
+
+    Eigen::Vector3d tip_position = mesh.nodes[tip_index].position;
+    std::cout << "  [Auto-Detect] Tip found at: " 
+              << tip_position.x() << ", " << tip_position.y() << ", " << tip_position.z() << std::endl;
+
+    // 2. Activate nodes near the tip (2mm radius)
+    double detection_radius = 0.002; 
+    int active_count = 0;
+
+    for (auto& node : mesh.nodes) {
+        double dist = (node.position - tip_position).norm();
+        
+        if (dist <= detection_radius) {
+            node.is_active_contact = true;
+            active_count++;
+        } else {
+            node.is_active_contact = false;
+        }
+    }
+
+    std::cout << "  [Auto-Detect] Activated " << active_count << " nodes for simulation." << std::endl;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -285,13 +329,20 @@ void Simulation::load_geometry_stl(const std::string& path) {
 
 void Simulation::load_geometry_cad(const std::string& path, const std::string& format) {
     TopoDS_Shape shape;
-    if (format.find("step") != std::string::npos) {
-        STEPControl_Reader r; if (r.ReadFile(path.c_str()) != IFSelect_RetDone) throw std::runtime_error("Bad STEP file");
+    
+    // --- CRITICAL FIX: Check for "stp" as well as "step" ---
+    if (format.find("step") != std::string::npos || format.find("stp") != std::string::npos) {
+        STEPControl_Reader r; 
+        if (r.ReadFile(path.c_str()) != IFSelect_RetDone) throw std::runtime_error("Bad STEP file");
         r.TransferRoots(); shape = r.OneShape();
     } else {
-        IGESControl_Reader r; if (r.ReadFile(path.c_str()) != IFSelect_RetDone) throw std::runtime_error("Bad IGES file");
+        // Otherwise assume IGES
+        IGESControl_Reader r; 
+        if (r.ReadFile(path.c_str()) != IFSelect_RetDone) throw std::runtime_error("Bad IGES file");
         r.TransferRoots(); shape = r.OneShape();
     }
+    // -------------------------------------------------------
+
     BRepMesh_IncrementalMesh(shape, 0.05);
     std::map<std::array<double,3>, int> nmap;
     for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
@@ -324,7 +375,7 @@ void Simulation::calculate_tool_life_prediction() {
 
 void Simulation::write_output() {
     json out;
-    out["metadata"] = { {"engine_version", "3.2-CALIBRATED"}, {"nodes", mesh.nodes.size()} };
+    out["metadata"] = { {"engine_version", "3.5-SMART-TURNING"}, {"nodes", mesh.nodes.size()} };
     out["tool_life_prediction"] = { {"predicted_hours", predicted_tool_life_hours}, {"wear_threshold_mm", 0.3} };
     out["time_series_data"] = time_series_output;
     if (!cfd_visualization_data.empty()) out["cfd_particle_animation"] = cfd_visualization_data;
