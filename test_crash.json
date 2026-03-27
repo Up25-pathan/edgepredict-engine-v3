@@ -1,0 +1,72 @@
+{
+    "simulation_name": "Crash Test",
+    "machining_type": "turning",
+    "simulation_parameters": {
+        "num_steps": 500,
+        "time_step_duration_s": 1e-4,
+        "output_interval_steps": 10,
+        "min_time_step_s": 1e-12,
+        "max_time_step_s": 1e-4
+    },
+    "machining_parameters": {
+        "rpm": 800,
+        "feed_rate_mm_min": 160,
+        "depth_of_cut_mm": 5.0,
+        "initial_tool_position_mm": [
+            10.0,
+            0.0,
+            -10.0
+        ]
+    },
+    "file_paths": {
+        "tool_geometry": "",
+        "workpiece_geometry": "",
+        "gcode_file": "crash.gcode",
+        "output_directory": "output_test",
+        "output_results": "results_test.json"
+    },
+    "material_properties": {
+        "name": "Ti-6Al-4V",
+        "density_kg_m3": 4430,
+        "yield_strength_mpa": 880,
+        "tensile_strength_mpa": 950,
+        "elastic_modulus_gpa": 114,
+        "poisson_ratio": 0.34,
+        "thermal_conductivity_w_mk": 6.7,
+        "specific_heat_j_kgk": 526,
+        "melting_point_c": 1660,
+        "friction_coefficient": 0.45
+    },
+    "solver_parameters": {
+        "sph": {
+            "max_particles": 500000,
+            "smoothing_radius_mm": 0.5,
+            "gas_stiffness": 1000000.0,
+            "lod_enabled": true,
+            "lod_active_radius_mm": 5.0,
+            "lod_near_radius_mm": 15.0,
+            "lod_near_skip_steps": 5,
+            "lod_far_skip_steps": 20,
+            "damage_enabled": true,
+            "jc_D1": 0.1,
+            "jc_D2": 0.2,
+            "jc_D3": -0.5,
+            "jc_D4": 0.014,
+            "jc_D5": 3.8,
+            "damage_threshold": 1.0,
+            "reference_strain_rate": 1.0
+        },
+        "fem": {
+            "max_nodes": 50000,
+            "element_type": "tetrahedron",
+            "implicit_solve": false,
+            "mass_scaling_factor": 100.0,
+            "stiffness_scaling_factor": 1.0
+        },
+        "contact": {
+            "penalty_stiffness": 5e9,
+            "friction_model": "coulomb",
+            "search_radius_mm": 1.0
+        }
+    }
+}

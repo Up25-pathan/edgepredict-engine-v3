@@ -1,0 +1,78 @@
+{
+    "simulation_name": "Turning Case Study - CNMG Insert",
+    "machining_type": "turning",
+    "simulation_parameters": {
+        "num_steps": 2000,
+        "time_step_duration_s": 1e-6,
+        "output_interval_steps": 10,
+        "min_time_step_s": 1e-12,
+        "max_time_step_s": 1e-4
+    },
+    "machining_parameters": {
+        "rpm": 800,
+        "feed_rate_mm_min": 160,
+        "depth_of_cut_mm": 1.0,
+        "initial_tool_position_mm": [
+            60.0,
+            0.0,
+            5.0
+        ]
+    },
+    "file_paths": {
+        "tool_geometry": "",
+        "workpiece_geometry": "",
+        "gcode_file": "turning_test.gcode",
+        "output_directory": "output_turning",
+        "output_results": "results_turning.json"
+    },
+    "material_properties": {
+        "name": "Ti-6Al-4V",
+        "density_kg_m3": 4430,
+        "youngs_modulus_Pa": 113.8e9,
+        "specific_heat_J_kgK": 526,
+        "thermal_conductivity_W_mK": 6.7,
+        "melting_point_C": 1660,
+        "yield_strength_MPa": 880,
+        "failure_strain": 0.3,
+        "johnson_cook_plasticity": {
+            "A_yield_strength_MPa": 880,
+            "B_strain_hardening_MPa": 290,
+            "n_strain_hardening_exp": 0.47,
+            "C_strain_rate_sensitivity": 0.015,
+            "m_thermal_softening_exp": 1.0
+        }
+    },
+    "tool_material": {
+        "name": "Sandvik CNMG 120408",
+        "density_kg_m3": 14500,
+        "youngs_modulus_GPa": 600,
+        "poissons_ratio": 0.22,
+        "specific_heat_J_kgK": 200,
+        "thermal_conductivity_W_mK": 80,
+        "melting_point_C": 2870,
+        "yield_strength_GPa": 4.0,
+        "coating": "TiAlN",
+        "coating_thickness_um": 4.0
+    },
+    "sph_parameters": {
+        "smoothing_radius_m": 0.0005,
+        "gas_stiffness": 3000,
+        "max_particles": 5000000
+    },
+    "fem_parameters": {
+        "max_nodes": 50000,
+        "damping_ratio": 0.1,
+        "mass_scaling_factor": 1000.0,
+        "stiffness_scaling_factor": 0.1
+    },
+    "cfd_parameters": {
+        "enabled": true,
+        "grid_x": 50,
+        "grid_y": 50,
+        "grid_z": 50,
+        "cell_size_m": 0.001,
+        "coolant_type": "Water-Glycol",
+        "inlet_velocity_m_s": 1.5,
+        "inlet_temperature_C": 20.0
+    }
+}
