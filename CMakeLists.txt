@@ -97,7 +97,6 @@ set(CPP_SOURCES
     src/GeometryLoader.cpp
     src/GCodeInterpreter.cpp
     src/VTKExporter.cpp
-    src/CFDSolver.cpp
     src/HDF5Exporter.cpp
     src/StdoutIPCExporter.cpp
     src/OptimizationManager.cpp
@@ -114,9 +113,6 @@ set(CUDA_SOURCES
     src/FEMSolver.cu
     src/ContactSolver.cu
     src/CFDSolverGPU.cu
-    src/MultiGPUManager.cu
-    src/AMRManager.cu
-    src/ImplicitFEMSolver.cu
     src/AdiabaticShearModel.cu
     src/ToolCoatingModel.cu
 )
